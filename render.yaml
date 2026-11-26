@@ -1,0 +1,59 @@
+services:
+  # Replaces: mariadb:10.8 service + mariadb-data volume
+  - type: pserv
+    name: education-mariadb
+    runtime: image
+    plan: starter
+    image:
+      url: docker.io/library/mariadb:10.8
+    dockerCommand: >-
+      mariadbd
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --skip-character-set-client-handshake
+      --skip-innodb-read-only-compressed
+    envVars:
+      - key: MARIADB_ROOT_PASSWORD
+        sync: false
+    disk:
+      name: mariadb-data
+      mountPath: /var/lib/mysql
+      sizeGB: 10
+
+  # Replaces: redis:alpine service
+  - type: keyvalue
+    name: education-redis
+    plan: starter
+    ipAllowList: [] # Private network access only
+
+  # Replaces: frappe service
+  - type: web
+    name: education-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard # 2 GB RAM minimum recommended for Frappe + ERPNext + Education
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: SITE_NAME
+        value: education.local
+      - key: MARIADB_ROOT_PASSWORD
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: DB_HOST
+        fromService:
+          type: pserv
+          name: education-mariadb
+          property: host
+      - key: DB_PORT
+        value: "3306"
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: education-redis
+          property: connectionString
+    disk:
+      name: frappe-sites
+      mountPath: /home/frappe/frappe-bench/sites
+      sizeGB: 10
